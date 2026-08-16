@@ -1,6 +1,7 @@
 # Threat notes
 
-Top three risks in this design, and what is actually done about them.
+Top risks in this design, and what is actually done about them. Risks 1–3 are properties of
+the engine; risk 4 exists only because the engine is now reachable over HTTP.
 
 ## 1. Prompt injection via vendor-supplied evidence
 
@@ -11,17 +12,17 @@ an LLM prompt, a regex that grants credit for the phrase "SOC 2 compliant", a su
 output is trusted — can be talked into approving a vendor with no security evidence.
 
 **Mitigation here.**
-- Risk is computed only from structured `has_*` flags on each `Document`. Document prose never
+- Risk is computed only from structured `Has*` flags on each `Document`. Document prose never
   reaches the scoring logic. This is structural, not best-effort: there is no code path from
-  `Document.text` to a risk score.
+  `Document.Text` to a risk score.
 - Prose is read for exactly two things — building a citation snippet, and matching
-  `INJECTION_PATTERNS`. A match **adds** weight and a reason; nothing in the system can subtract.
+  `RiskEvaluator.InjectionPatterns`. A match **adds** weight and a reason; nothing in the system can subtract.
 - Untrusted text never enters the audit log (ids only), so it cannot mislead a downstream reader
   or a log-consuming tool.
-- Tested by `test_prompt_injection.py`, including the case where the injection is in the *user's
-  question* rather than the evidence.
+- Tested by `PromptInjectionTests.cs`, including the case where the injection is in the *user's
+  question* rather than the evidence, and end-to-end over HTTP in `WorkflowEndpointTests.cs`.
 
-**In production.** The `has_*` flags would come from a separate extraction step. That step is
+**In production.** The `Has*` flags would come from a separate extraction step. That step is
 where the real danger moves to: an LLM extractor reading a hostile PDF. Mitigations there —
 constrain the extractor to a closed schema of booleans/enums (never free text that becomes an
 instruction), run it with no tools and no network, treat extracted claims as *asserted* until a
@@ -37,11 +38,12 @@ one tenant unblocking another tenant's action.
 
 **Mitigation here.**
 - `approvedBy` is checked against a per-tenant approver registry, not merely for presence.
-- Self-approval is refused (`approved_by == user_id`).
-- Cross-tenant approvers are refused — `APPROVERS[tenant_id]` only.
+- Self-approval is refused: `approvedBy` is compared against the user id derived from the
+  authenticated principal, not against another caller-supplied field.
+- Cross-tenant approvers are refused — `EvidenceFixtures.Approvers[tenantId]` only.
 - Authorization is evaluated **before** approval, so an unauthorized role is blocked even while
   holding a valid approval. A `viewer` cannot execute regardless.
-- `WorkflowResult.validate()` refuses to emit `"actionStatus": "executed"` when approval was
+- `WorkflowResult.Validate()` refuses to emit `"actionStatus": "executed"` when approval was
   required but not recorded — a bug in the gate becomes a raised error, not a silent approval.
 - Granted and denied approvals both land in the audit log.
 
@@ -58,12 +60,16 @@ confidentiality breach and a compliance incident. In a system with retrieval, th
 quietly — as a citation, a snippet, or a risk score computed over the wrong corpus.
 
 **Mitigation here.**
-- Tenant filtering happens in exactly one function, `search_evidence`, and nowhere else. No
-  other module reads `fixtures.all_documents()`.
-- Unknown tenants raise `UnknownTenantError` rather than falling through to an unfiltered set —
-  fail closed.
+- Tenant filtering happens in exactly one place, `InMemoryEvidenceStore.Search`, and nowhere
+  else. No other type reads `EvidenceFixtures.All()`.
+- The tenant is taken from the authenticated principal, never from a request body or query
+  parameter — including on `GET /api/v1/audit`, which has no tenant parameter to override.
+- Unknown tenants raise `UnknownTenantException` rather than falling through to an unfiltered
+  set — fail closed. The `403` does not echo the rejected tenant id, so failing closed does not
+  become a tenant-enumeration oracle.
 - Defence in depth: before the result is returned, every citation's `documentId` is validated
-  against `document_ids_for_tenant(tenant_id)`. A leak introduced elsewhere still cannot escape.
+  against `DocumentIdsForTenant(tenantId)`. A leak introduced elsewhere still cannot escape —
+  `InvariantBreachTests.cs` injects exactly such a leak and asserts the request fails.
 - Both tenants hold evidence for the same vendor and get different answers, which is what makes
   the isolation test meaningful rather than vacuous.
 
@@ -72,10 +78,48 @@ storage layer — row-level security or per-tenant databases/indexes and per-ten
 keys, so a missing `WHERE tenant_id = ?` fails rather than over-returns. Scope caches, embeddings
 and audit queries per tenant too; a shared vector index is the usual place this goes wrong.
 
+## 4. The HTTP edge: unauthenticated, caller-asserted identity
+
+**Risk.** This is the largest known weakness in the current service, and it is deliberate
+rather than overlooked. `X-Tenant-Id`, `X-User-Id` and `X-Role` are **not authenticated**.
+Anyone who can reach the port can claim any tenant, any user and any role — which means the
+tenant isolation and human-in-the-loop boundaries above hold only against a caller who
+supplies honest headers. As deployed, they are a demonstration of where the controls attach,
+not controls against a network attacker.
+
+Related edge exposures: error responses that distinguish "unknown tenant" from other failures
+can be used to enumerate tenants; and unlimited request volume makes approval brute-forcing
+and evidence-scraping cheap.
+
+**Mitigation here.**
+- Identity is resolved once, in middleware, into an `ICallerContext` that endpoints read from.
+  There is no path by which an endpoint can take identity from a request body.
+- The request contract does not declare `tenantId`, `userId` or `role`, and
+  `JsonUnmappedMemberHandling.Disallow` makes sending them a `400` rather than a silent
+  no-op — so a privilege-escalation attempt fails loudly instead of appearing to work.
+  Pinned by `IdentityBoundaryTests.cs`.
+- An unrecognised role is a `400`, not a silent demotion to the least-privileged role: a typo
+  should be visible, not quietly change the caller's authority.
+- The unknown-tenant `403` returns a generic message and does not echo the rejected tenant id.
+- `approvedBy` is the one identity-adjacent field still taken from the body, because it
+  describes a third party rather than the caller — and it is verified, not trusted.
+
+**In production.** Replace the headers with a verified OIDC/JWT principal: tenant and role from
+signed claims, validated server-side against the IdP's JWKS, never read from a header the
+client controls. Then add what an exposed endpoint needs regardless — per-tenant and per-user
+rate limits (tighter on action-bearing requests than advisory ones), throttling and alerting on
+repeated approval attempts against one vendor, mTLS or a gateway in front, and request size
+limits. Until that exists, this service belongs on a trusted network, not a public one.
+
 ## Honourable mentions
 
 - **Audit log is in-memory and mutable** — a real one must be append-only and tamper-evident
-  (hash chain / WORM), or it cannot be used as evidence in an investigation.
+  (hash chain / WORM), or it cannot be used as evidence in an investigation. It is also
+  process-local: restarting the service discards the trail, and a second instance would keep
+  its own.
+- **`GET /api/v1/evidence` returns untrusted document text.** It is tenant-scoped, so it is not
+  a leak, but it hands a caller the raw vendor prose. It exists to make the isolation property
+  observable; a real deployment should question whether that route needs to exist at all.
 - **No idempotency** — `markVendorApproved` is naturally idempotent here, but a real risky action
   (payment, provisioning) needs an idempotency key so a retry doesn't double-execute.
 - **Evidence has no freshness** — a SOC 2 report from three years ago passes the same check as a

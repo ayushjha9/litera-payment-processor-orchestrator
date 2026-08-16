@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+# Python (removed in the following commit; kept here so the port commit stays clean)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+.DS_Store
+
+# Per-machine agent settings — contains local absolute paths, not shareable
+.claude/settings.local.json
