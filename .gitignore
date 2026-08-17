@@ -9,5 +9,8 @@ artifacts/
 
 .DS_Store
 
+# JetBrains Rider / IntelliJ
+.idea/
+
 # Per-machine agent settings — contains local absolute paths, not shareable
 .claude/settings.local.json

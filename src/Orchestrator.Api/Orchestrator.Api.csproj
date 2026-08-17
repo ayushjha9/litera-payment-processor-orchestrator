@@ -6,6 +6,14 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+
+    <!--
+      The Prometheus exporter has never shipped a stable version; -beta is the only channel it
+      has, and it is what the OpenTelemetry project itself points users at. Pinned exactly
+      rather than floated, so a prerelease cannot change under the build.
+    -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.17.0-beta.1" />
   </ItemGroup>
 
   <PropertyGroup>

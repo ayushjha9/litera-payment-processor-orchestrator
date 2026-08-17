@@ -13,13 +13,9 @@ namespace Orchestrator.Api.Endpoints;
 /// <summary>The HTTP surface.</summary>
 public static class ApiEndpoints
 {
-    /// <summary>Map every route under <c>/api/v1</c>, plus the health probe.</summary>
+    /// <summary>Map every route under <c>/api/v1</c>. Probes live in <c>HealthEndpoints</c>.</summary>
     public static void MapApiEndpoints(this WebApplication app)
     {
-        app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
-            .WithName("Health")
-            .WithSummary("Liveness probe.");
-
         var api = app.MapGroup("/api/v1");
 
         api.MapPost("/workflow/run", RunWorkflow)

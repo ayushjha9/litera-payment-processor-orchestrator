@@ -42,14 +42,59 @@ against endpoints that actually exist. Each is flagged where that changes the ad
   decision can be reconstructed after the rules change.
 
 ## Observability
-- Structured logs and one trace per workflow run, spanning retrieve → assess → gate → act.
-  **Now actionable**: add OpenTelemetry to `Program.cs` and correlate on the audit event ids
-  already returned in every response.
-- Metrics that matter operationally: block rate, approval latency, high-risk volume per tenant,
-  rate of injection-pattern detections (a spike is an incident, not noise).
-- Alert on invariant violations from `WorkflowResult.Validate()` — those are should-never-happen
-  conditions and deserve a page, not a log line. The handler already logs these at Critical and
-  returns an opaque `500`; wire that log level to a pager.
+
+**Partly built.** Metrics and health probes exist; tracing and alert routing do not.
+
+### What is in place
+- Five instruments on the `Orchestrator.Workflow` meter, exported at `/metrics` — assessment
+  volume by risk level, gate verdicts by `actionStatus`, injection detections, identity
+  rejections by reason, and run duration. All tagged with `tenantId`. See the README table.
+- Instrumentation is a decorator (`InstrumentedWorkflowEngine`), so the domain has no telemetry
+  dependency and emission cannot fail a request.
+- `/health/live` and `/health/ready`, the latter probing the evidence store and audit log with
+  reads only. A probe that wrote would flood the compliance record it exists to protect.
+
+### What is still missing
+- **Tracing.** One span per workflow run, covering retrieve → assess → gate → act, correlated
+  on the audit event ids already returned in every response. The metrics answer "how often";
+  a trace answers "why was this one slow", which is the question metrics cannot.
+- **Exemplars** linking a slow `workflow.assessment.duration` bucket to a specific trace.
+- **Alert routing.** `WorkflowResult.Validate()` failures are should-never-happen conditions
+  and deserve a page, not a log line. The handler logs them at Critical and returns an opaque
+  `500`; nothing yet turns that level into a page. Same for a sustained rise in
+  `workflow.injection.detected.total`, which is an incident rather than a metric.
+- **Scrape-liveness alerting.** Metric emission deliberately swallows its own failures, so a
+  broken exporter shows up as *absence of data*. That is only detectable if something alerts on
+  the absence — otherwise the failure mode is silent by construction.
+- **`/metrics` is unauthenticated**, because a Prometheus scraper has no tenant to present. It
+  exposes per-tenant request volumes and risk profiles, which is commercially sensitive even
+  though it contains no evidence text. Restrict it at the network — a separate listener port
+  bound to the internal interface, or a scrape sidecar — not in application code.
+
+### Metrics make the state bottleneck visible; they do not fix it
+
+`workflow.assessment.duration` will show contention on `InMemoryAuditLog`'s lock long before
+anything else does, and per-tenant assessment volume will show which tenant is driving it. That
+is genuinely useful: it turns "the service feels slow" into a measurement.
+
+But it is diagnosis, not treatment. The audit log and vendor state are **process-local**
+singletons, so the numbers describe one instance and nothing else:
+
+- Two instances keep two audit trails. `GET /api/v1/audit` returns whichever one the request
+  landed on, so the trail is *incomplete by construction* — and being incomplete, it cannot be
+  relied on as evidence in an investigation, which is the entire point of having it.
+- Audit event ids are gap-free and monotonic **per process**. A second instance starts again at
+  `evt-000001`, so ids collide across instances while appearing well-formed.
+- `markVendorApproved` writes to a per-process `ConcurrentDictionary`, so vendor approval state
+  differs between instances — the same tenant can see a vendor as approved or not depending on
+  routing.
+- Restarting discards everything.
+
+None of that is visible in a dashboard, because each instance reports its own state as
+perfectly healthy. Horizontal scaling requires moving both to a shared store first — an
+append-only audit table with a per-tenant hash chain, and vendor state in a transactional store
+with the idempotency key described above. Adding instances before that trades a latency problem
+for a correctness problem in the compliance record, which is a much worse one to have.
 
 ## Retries and idempotency
 **Now actionable** — `POST /api/v1/workflow/run` is retryable by any HTTP client, so this is no

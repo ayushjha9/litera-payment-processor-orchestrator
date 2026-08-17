@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Orchestrator.Api.Telemetry;
 using Orchestrator.Core.Models;
 
 namespace Orchestrator.Api.ErrorHandling;
@@ -12,7 +13,9 @@ namespace Orchestrator.Api.ErrorHandling;
 /// The mapping is a security surface in its own right, so each case is deliberate about how
 /// much it says. See the individual branches.
 /// </remarks>
-public sealed class ProblemDetailsExceptionHandler(ILogger<ProblemDetailsExceptionHandler> logger)
+public sealed class ProblemDetailsExceptionHandler(
+    ILogger<ProblemDetailsExceptionHandler> logger,
+    WorkflowMetrics metrics)
     : IExceptionHandler
 {
     /// <inheritdoc/>
@@ -74,6 +77,16 @@ public sealed class ProblemDetailsExceptionHandler(ILogger<ProblemDetailsExcepti
         if (problem is null)
         {
             return false;
+        }
+
+        // Counted here rather than in the middleware because the tenant is validated by the
+        // evidence store, not at the edge. The tenant is not tagged: it is by definition an
+        // unrecognised, caller-supplied value, so WorkflowMetrics collapses it to "unknown" —
+        // which is also what keeps this counter from being a free way to mint time series, and
+        // mirrors the 403 above declining to name the rejected tenant.
+        if (exception is UnknownTenantException)
+        {
+            metrics.RecordIdentityRejection(IdentityRejection.UnknownTenant, tenantId: null);
         }
 
         if (exception is OutputContractException)

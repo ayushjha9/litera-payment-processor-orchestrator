@@ -20,15 +20,15 @@ The interesting part of this problem is not the workflow — it's what the workf
 
 ## Quickstart
 
-.NET 10 SDK. No third-party runtime dependencies beyond ASP.NET Core's built-in OpenAPI
-package; xUnit is test-only.
+.NET 10 SDK. Runtime dependencies are ASP.NET Core's built-in OpenAPI package and the
+OpenTelemetry metrics exporter; xUnit is test-only.
 
 ```bash
 git clone https://github.com/<your-user>/paymentProcessorOrchestrator.git
 cd paymentProcessorOrchestrator
 
 dotnet build
-dotnet test                              # → 58 passed
+dotnet test                              # → 74 passed
 dotnet run --project src/Orchestrator.Api
 ```
 
@@ -36,8 +36,8 @@ The service listens on `http://localhost:5180` (see
 `src/Orchestrator.Api/Properties/launchSettings.json`). In Development the OpenAPI document is
 served at `/openapi/v1.json`.
 
-- **`dotnet test`** — 58 tests: 34 domain tests carried over from the original Python suite,
-  plus 24 covering the HTTP edge that the library version had no need for.
+- **`dotnet test`** — 74 tests: 34 domain tests carried over from the original Python suite,
+  plus 40 covering the HTTP edge that the library version had no need for.
 - **`dotnet run`** — the four scenarios below are reproducible with `curl`.
 
 ## Identity
@@ -72,7 +72,47 @@ approver registry and refused if it matches the caller.
 | `GET` | `/api/v1/audit` | The calling tenant's audit trail. No tenant parameter — you may only read your own. |
 | `GET` | `/api/v1/vendors/{vendorId}/status` | Approval state, for the calling tenant only. |
 | `GET` | `/api/v1/evidence` | The calling tenant's evidence. Makes the isolation property observable. |
-| `GET` | `/health` | Liveness. The only route needing no identity. |
+| `GET` | `/health/live` | Liveness. `200` whenever the process is serving. |
+| `GET` | `/health/ready` | Readiness. `503` with ProblemDetails when a dependency is not answering. |
+| `GET` | `/health` | Deprecated alias for `/health/live`, kept so existing probes keep working. |
+| `GET` | `/metrics` | Prometheus scrape endpoint. |
+
+`/health/*` and `/metrics` are the routes that need no identity — a probe is issued by an
+orchestrator that has no tenant, and a scraper cannot present headers either. Everything they
+return is therefore safe to show an unauthenticated client: readiness reports check *names and
+statuses*, never an exception message.
+
+**Liveness and readiness are answered separately on purpose.** An orchestrator restarts on a
+failed liveness probe and drains traffic on a failed readiness probe. Collapsing them into one
+endpoint means a dependency blip restarts a perfectly healthy process, which fixes nothing and
+drops in-flight requests. So liveness runs no checks at all, and readiness runs the dependency
+check.
+
+### Metrics
+
+`System.Diagnostics.Metrics`, meter `Orchestrator.Workflow`, exported at `/metrics` via
+OpenTelemetry's Prometheus exporter. All five instruments are tagged with `tenantId`:
+
+| Instrument | Extra tags | Answers |
+|---|---|---|
+| `workflow.assessments.total` | `riskLevel` | How much traffic, and how risky |
+| `workflow.actions.total` | `actionStatus` | How often a real action is blocked, and why |
+| `workflow.injection.detected.total` | — | Tampering attempts. A spike is an incident, not noise |
+| `workflow.identity.rejected.total` | `reason` | `missing_header`, `unparseable_role`, `unknown_tenant` |
+| `workflow.assessment.duration` | `riskLevel` | Latency, in milliseconds |
+
+> **Metric labels are a lower-trust surface than the audit log**, which is tenant-scoped and
+> read by people investigating one decision. A metrics backend is scraped by operations,
+> retained on a different clock, and readable by anyone with a dashboard. So no document id,
+> evidence text, citation snippet, question or user id is ever a tag — `tenantId` is the only
+> caller-derived label, and an unrecognised tenant collapses to `unknown` rather than minting a
+> time series per invented value. Pinned by `MetricsTests.cs`.
+
+`actionStatus` and `riskLevel` labels use the same snake_case spelling as the JSON, so a value
+on a dashboard and a value in a response are the same string.
+
+Emission cannot fail a request: every write is wrapped, and a deliberately broken meter is
+asserted not to affect the response.
 
 ### A blocked action returns `200`, not `4xx`
 
@@ -212,9 +252,11 @@ src/
     Contracts/    request/response DTOs; unknown fields rejected
     Endpoints/    the routes
     ErrorHandling/ ProblemDetails mapping
+    Health/       liveness, readiness, and the dependency check
+    Telemetry/    WorkflowMetrics + InstrumentedWorkflowEngine — instrumentation as a decorator
 tests/
   Orchestrator.Core.Tests/           34 domain tests
-  Orchestrator.Api.Tests/            24 HTTP-edge tests
+  Orchestrator.Api.Tests/            40 HTTP-edge tests
 ```
 
 The domain has no ASP.NET reference. The trust boundaries are domain properties and are
@@ -233,6 +275,10 @@ tested without a server; the API project adds the edge concerns on top.
 - **Shared state is concurrent.** The audit log and vendor state are singletons serving
   parallel requests — a property the single-threaded original never had to hold. Both are
   internally synchronised and covered by tests.
+- **Instrumentation is a decorator, not a concern of the domain.**
+  `InstrumentedWorkflowEngine` wraps `IWorkflowEngine` and is what DI hands out, so
+  `Orchestrator.Core` keeps zero telemetry dependencies alongside its zero ASP.NET ones. The
+  34 domain tests construct a plain engine and needed no change when metrics were added.
 
 ## Out of scope
 

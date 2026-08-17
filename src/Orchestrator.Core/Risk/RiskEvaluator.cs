@@ -26,6 +26,19 @@ public sealed partial class RiskEvaluator : IRiskEvaluator
     private const int HighThreshold = 3;
     private const int MediumThreshold = 1;
 
+    /// <summary>
+    /// The reason emitted when instruction-like text is found in evidence.
+    /// </summary>
+    /// <remarks>
+    /// Public so a caller can recognise the signal without re-running the detector or
+    /// matching a copied string literal. It is deliberately <i>not</i> a new field on
+    /// <see cref="RiskAssessment"/>: the response contract is byte-compatible with the
+    /// original implementation and should stay that way.
+    /// </remarks>
+    public const string InjectionDetectedReason =
+        "Evidence contains instruction-like text addressed to an automated reviewer. " +
+        "Treated as untrusted content and as a tampering signal; it does not affect the decision.";
+
     // Phrases that look like an instruction aimed at an automated reviewer. Matching one is a
     // tampering signal, not a command. Order is significant: the first match wins, and the
     // matched text anchors the citation excerpt.
@@ -110,9 +123,7 @@ public sealed partial class RiskEvaluator : IRiskEvaluator
         {
             var (document, matched) = injection.Value;
             score += 1;
-            reasons.Add(
-                "Evidence contains instruction-like text addressed to an automated reviewer. " +
-                "Treated as untrusted content and as a tampering signal; it does not affect the decision.");
+            reasons.Add(InjectionDetectedReason);
             citations.Add(new Citation(document.DocumentId, Excerpt(document.Text, around: matched)));
         }
 

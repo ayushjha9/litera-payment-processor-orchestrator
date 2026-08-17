@@ -1,3 +1,5 @@
+using Orchestrator.Api.Health;
+using Orchestrator.Api.Telemetry;
 using Orchestrator.Core.Models;
 
 namespace Orchestrator.Api.Middleware;
@@ -21,13 +23,13 @@ namespace Orchestrator.Api.Middleware;
 /// </remarks>
 public sealed class CallerContextMiddleware(RequestDelegate next)
 {
-    /// <summary>Paths served without a caller identity.</summary>
-    private static readonly string[] AnonymousPaths = ["/health", "/openapi"];
-
-    public async Task InvokeAsync(HttpContext context, ICallerContextAccessor accessor)
+    public async Task InvokeAsync(
+        HttpContext context,
+        ICallerContextAccessor accessor,
+        WorkflowMetrics metrics)
     {
         var path = context.Request.Path.Value ?? string.Empty;
-        if (AnonymousPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        if (HealthEndpoints.AnonymousPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
         {
             await next(context);
             return;
@@ -37,26 +39,36 @@ public sealed class CallerContextMiddleware(RequestDelegate next)
         var userId = context.Request.Headers[CallerContext.UserHeader].ToString();
         var roleHeader = context.Request.Headers[CallerContext.RoleHeader].ToString();
 
+        // Identity rejections are counted here, where the specific reason is known. The
+        // unknown-tenant case is counted in ProblemDetailsExceptionHandler instead, because the
+        // tenant is validated by the evidence store rather than at the edge — deliberately, so
+        // tenant filtering stays a single choke point.
         if (string.IsNullOrWhiteSpace(tenantId))
         {
-            throw new InvalidRequestException($"missing required header: {CallerContext.TenantHeader}");
+            throw Reject(IdentityRejection.MissingHeader, tenantId,
+                $"missing required header: {CallerContext.TenantHeader}");
         }
 
         if (string.IsNullOrWhiteSpace(userId))
         {
-            throw new InvalidRequestException($"missing required header: {CallerContext.UserHeader}");
+            throw Reject(IdentityRejection.MissingHeader, tenantId,
+                $"missing required header: {CallerContext.UserHeader}");
         }
 
         if (string.IsNullOrWhiteSpace(roleHeader))
         {
-            throw new InvalidRequestException($"missing required header: {CallerContext.RoleHeader}");
+            throw Reject(IdentityRejection.MissingHeader, tenantId,
+                $"missing required header: {CallerContext.RoleHeader}");
         }
 
         // Fail closed on an unrecognised role rather than defaulting to the least-privileged
         // one: a typo should be a loud 400, not a silent demotion the caller never notices.
         if (!Enum.TryParse<Role>(roleHeader, ignoreCase: true, out var role) || !Enum.IsDefined(role))
         {
-            throw new InvalidRequestException(
+            // The rejected role is echoed to the caller — it is their own input — but never
+            // becomes a metric label, where it would be an unbounded tag minted by anyone who
+            // can reach the port.
+            throw Reject(IdentityRejection.UnparseableRole, tenantId,
                 $"unknown role: '{roleHeader}'. Valid roles are viewer, analyst, approver.");
         }
 
@@ -68,6 +80,12 @@ public sealed class CallerContextMiddleware(RequestDelegate next)
         };
 
         await next(context);
+
+        InvalidRequestException Reject(string reason, string? tenant, string message)
+        {
+            metrics.RecordIdentityRejection(reason, tenant);
+            return new InvalidRequestException(message);
+        }
     }
 }
 
