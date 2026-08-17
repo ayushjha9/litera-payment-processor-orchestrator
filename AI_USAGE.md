@@ -54,6 +54,40 @@ The judgment calls are the substance of the exercise:
 - the rule weights and the `0 / 1–2 / ≥3` thresholds — arbitrary in that any small integer
   scheme would serve, deliberate in that only **high** gates the action.
 
+## The .NET port
+
+The Python implementation was later converted into this ASP.NET Core service, again with
+Claude Code. The pattern that worked the first time worked again: plan first, review the plan,
+then let it write the code.
+
+**Useful.** Mechanical translation is exactly the shape of task AI is good at — enums, records,
+DI registration, and turning six pytest files into six xUnit files. Asking *"what does putting
+this behind HTTP change that the library never had to answer?"* produced the three real
+issues — caller-asserted identity, concurrent access to process-global state, and exceptions
+becoming status codes — before any code was written, which is what made them design decisions
+rather than bugs found later.
+
+**What needed correcting.** Two defects were the kind a transcription introduces silently:
+
+- **Record equality over collections.** C# records compare `IReadOnlyList` members by
+  *reference*, where Python dataclasses compare by value. The ported determinism test would
+  have failed against a perfectly correct implementation — or, worse, been "fixed" by weakening
+  the assertion. `RiskAssessment` needed explicit structural equality.
+- **Unknown fields silently dropped.** System.Text.Json ignores unrecognised properties by
+  default. A literal port would have deleted the control that stops a caller sending
+  `role: "approver"` or `forceApprove: true` — the test would have gone green while the
+  boundary was gone.
+
+Both are cases where the target language's default behaviour differs from the source's, and
+neither shows up as a compile error. The lesson is narrower than last time but the same in
+kind: the risk in a port is not the code that fails to compile, it is the control that
+quietly stops being enforced.
+
+**Not delegated.** That identity moves to headers rather than staying in the body; that a
+blocked action is `200` rather than `403`; that the unknown-tenant `403` must not echo the
+tenant id; and that the latent excerpt-length quirk was preserved and documented rather than
+silently "fixed". Each is a judgment about what the system should mean, not what it should do.
+
 ## Overall assessment
 
 AI was fastest on the parts with a known shape: package scaffolding, turning a list of failure

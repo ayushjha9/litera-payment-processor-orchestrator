@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+.DS_Store
+
+# Per-machine agent settings — contains local absolute paths, not shareable
+.claude/settings.local.json
