@@ -1,0 +1,65 @@
+@*
+    The whole answer, composed.
+
+    Order matters here. The recommendation is what a reviewer acts on, so it leads — but the
+    reasons and citations sit directly under it rather than behind a disclosure, because a
+    recommendation without its evidence is the thing this system exists not to produce.
+
+    Note that an APPROVED HIGH-RISK result still shows "high" with every reason intact. That is
+    the engine's behaviour and the UI must not soften it: the record should show that a human
+    accepted a documented risk, not that the risk went away.
+*@
+
+<article class="oc-result" data-risk="@Result.RiskLevel.Wire()" data-action-status="@Result.ActionStatus.Wire()">
+
+    <header class="oc-result__header">
+        <RiskBadge Level="Result.RiskLevel" />
+        <ActionStatusBadge Status="Result.ActionStatus" />
+        @if (Result.RequiresApproval)
+        {
+            <span class="oc-badge oc-badge--gate" data-requires-approval="true">
+                <span class="oc-badge__label">Gate</span>
+                <span class="oc-badge__value">Approval required</span>
+            </span>
+        }
+    </header>
+
+    <p class="oc-result__recommendation">@Result.Recommendation</p>
+
+    <div class="oc-result__grid">
+        <ReasonList Reasons="Result.Reasons" Heading="Reasons" EmptyText="No reasons recorded." />
+
+        <ReasonList Reasons="Result.MissingEvidence"
+                    Heading="Missing evidence"
+                    EmptyText="Nothing outstanding." />
+    </div>
+
+    <CitationList Citations="Result.Citations" />
+
+    <footer class="oc-result__audit">
+        <h3 class="oc-result__audit-heading">Audit events</h3>
+        @if (Result.AuditEventIds.Count == 0)
+        {
+            <p class="oc-empty">None recorded.</p>
+        }
+        else
+        {
+            <ul class="oc-result__audit-ids">
+                @foreach (var id in Result.AuditEventIds)
+                {
+                    <li><code>@id</code></li>
+                }
+            </ul>
+        }
+        <p class="oc-result__audit-note">
+            Every run is recorded whether the action was allowed or blocked.
+        </p>
+    </footer>
+
+</article>
+
+@code {
+    /// <summary>The assessment to render.</summary>
+    [Parameter, EditorRequired]
+    public required WorkflowResponseDto Result { get; set; }
+}

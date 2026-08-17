@@ -1,0 +1,90 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject ISessionIdentity Identity
+@inject OrchestratorApiClient Api
+
+<div class="oc-shell">
+
+    <header class="oc-shell__header">
+        <div class="oc-shell__brand">
+            <span class="oc-shell__title">Vendor Risk Console</span>
+            <span class="oc-shell__subtitle">Regulated AI Action Workflow Engine</span>
+        </div>
+        <ApiStatusBadge Status="_apiStatus" />
+    </header>
+
+    <nav class="oc-shell__nav">
+        <NavLink href="" Match="NavLinkMatch.All" class="oc-shell__link">Assess</NavLink>
+        <NavLink href="audit" class="oc-shell__link">Audit trail</NavLink>
+        <NavLink href="evidence" class="oc-shell__link">Evidence</NavLink>
+    </nav>
+
+    <aside class="oc-shell__identity">
+        <IdentityPicker TenantId="Identity.TenantId"
+                        UserId="Identity.UserId"
+                        Role="Identity.Role"
+                        Tenants="SessionIdentity.KnownTenants"
+                        IdentityChanged="OnIdentityChanged" />
+    </aside>
+
+    <main class="oc-shell__main">
+        @Body
+    </main>
+
+    <footer class="oc-shell__footer">
+        Everything is in memory: no database, no LLM, no irreversible side effect.
+        Identity headers are unauthenticated — see <code>THREAT_NOTES.md</code>.
+    </footer>
+
+</div>
+
+@code {
+    private ApiStatusBadge.ApiStatus _apiStatus = ApiStatusBadge.ApiStatus.Unknown;
+    private Timer? _statusTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Identity.Changed += OnIdentityStateChanged;
+        await RefreshStatusAsync();
+
+        // Polled rather than checked once, so an API that goes down mid-session is noticed.
+        // A stale "ready" badge next to an empty result is exactly the ambiguity the badge
+        // exists to remove.
+        _statusTimer = new Timer(
+            async void (_) =>
+            {
+                try
+                {
+                    await RefreshStatusAsync();
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The circuit went away between ticks.
+                }
+            },
+            state: null,
+            dueTime: TimeSpan.FromSeconds(10),
+            period: TimeSpan.FromSeconds(10));
+    }
+
+    private async Task RefreshStatusAsync() => _apiStatus = await Api.GetStatusAsync();
+
+    /// <summary>
+    /// The picker reports a change; the session records it and every open page re-reads.
+    /// </summary>
+    /// <remarks>
+    /// The component itself holds no state and knows nothing about headers — it raises an event
+    /// and the host decides. That is what keeps the library free of session and HTTP concerns.
+    /// </remarks>
+    private void OnIdentityChanged((string TenantId, string UserId, RoleDto Role) identity) =>
+        Identity.Set(identity.TenantId, identity.UserId, identity.Role);
+
+    private void OnIdentityStateChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Identity.Changed -= OnIdentityStateChanged;
+        _statusTimer?.Dispose();
+    }
+}

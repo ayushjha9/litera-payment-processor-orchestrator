@@ -1,0 +1,91 @@
+@page "/audit"
+@implements IDisposable
+@inject ISessionIdentity Identity
+@inject OrchestratorApiClient Api
+
+<PageTitle>Audit trail — Vendor Risk Console</PageTitle>
+
+<h1>Audit trail</h1>
+
+<p class="oc-lede">
+    Every run is recorded — <code>workflow_run</code>, <code>action_attempt</code> and
+    <code>decision</code> — whether the action was allowed or blocked. Records carry document
+    <strong>ids</strong>, never document text.
+</p>
+
+@*
+    Scoped to the session's tenant by the API, which has no tenant parameter. There is
+    deliberately no selector here beyond the identity picker: offering one would imply a
+    capability that does not and should not exist.
+*@
+<p class="oc-scope-note">Showing events for <strong>@Identity.TenantId</strong> only.</p>
+
+@if (_problem is not null)
+{
+    <div class="oc-alert oc-alert--error" role="alert">
+        <strong>@_problem.Title</strong>
+        <span>@_problem.Detail</span>
+    </div>
+}
+else if (_loading)
+{
+    <p class="oc-empty">Loading…</p>
+}
+else
+{
+    @* An unreachable API surfaces as an error above, so an empty table here means exactly
+       what it says: no events have been recorded for this tenant. *@
+    <AuditTable Events="_events" EmptyText="No audit events recorded for this tenant yet." />
+}
+
+@code {
+    private IReadOnlyList<AuditEventDto>? _events;
+    private ApiProblemException? _problem;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Identity.Changed += OnIdentityChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _problem = null;
+
+        try
+        {
+            _events = await Api.GetAuditAsync();
+        }
+        catch (ApiProblemException exception)
+        {
+            _problem = exception;
+            _events = null;
+        }
+        catch (HttpRequestException)
+        {
+            _problem = new ApiProblemException(
+                System.Net.HttpStatusCode.ServiceUnavailable,
+                "API unavailable",
+                "The orchestrator API could not be reached. This is not an empty audit trail.");
+            _events = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async void OnIdentityChanged()
+    {
+        // Drop the previous tenant's events before fetching, so a slow request cannot leave one
+        // tenant's trail on screen under another tenant's identity.
+        _events = null;
+        await InvokeAsync(StateHasChanged);
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Identity.Changed -= OnIdentityChanged;
+}

@@ -1,0 +1,39 @@
+@*
+    The reasons behind the assessment.
+
+    Server-generated strings, but rendered as text on the same rule as everything else — one
+    of them quotes the fact that instruction-like content was found, and a reviewer reads this
+    list next to untrusted material.
+*@
+
+<div class="oc-reasons">
+    <h3 class="oc-reasons__heading">@Heading</h3>
+
+    @if (Reasons is null || Reasons.Count == 0)
+    {
+        <p class="oc-empty">@EmptyText</p>
+    }
+    else
+    {
+        <ul class="oc-reasons__list">
+            @foreach (var reason in Reasons)
+            {
+                <li class="oc-reasons__item">@reason</li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    /// <summary>The reasons to display.</summary>
+    [Parameter]
+    public IReadOnlyList<string>? Reasons { get; set; }
+
+    /// <summary>Section heading.</summary>
+    [Parameter]
+    public string Heading { get; set; } = "Reasons";
+
+    /// <summary>Shown when there is nothing to list.</summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "None.";
+}

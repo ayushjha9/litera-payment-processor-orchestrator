@@ -1,0 +1,82 @@
+@page "/evidence"
+@implements IDisposable
+@inject ISessionIdentity Identity
+@inject OrchestratorApiClient Api
+
+<PageTitle>Evidence — Vendor Risk Console</PageTitle>
+
+<h1>Evidence</h1>
+
+<p class="oc-lede">
+    The documents <strong>@Identity.TenantId</strong> holds for this vendor. Switch tenant in the
+    picker and the set changes completely: two tenants, one vendor, disjoint evidence, different
+    answers. That is the isolation property, made visible.
+</p>
+
+@if (_problem is not null)
+{
+    <div class="oc-alert oc-alert--error" role="alert">
+        <strong>@_problem.Title</strong>
+        <span>@_problem.Detail</span>
+    </div>
+}
+else if (_loading)
+{
+    <p class="oc-empty">Loading…</p>
+}
+else
+{
+    <EvidenceTable Documents="_documents" />
+}
+
+@code {
+    private IReadOnlyList<DocumentDto>? _documents;
+    private ApiProblemException? _problem;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Identity.Changed += OnIdentityChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _problem = null;
+
+        try
+        {
+            _documents = await Api.GetEvidenceAsync();
+        }
+        catch (ApiProblemException exception)
+        {
+            _problem = exception;
+            _documents = null;
+        }
+        catch (HttpRequestException)
+        {
+            _problem = new ApiProblemException(
+                System.Net.HttpStatusCode.ServiceUnavailable,
+                "API unavailable",
+                "The orchestrator API could not be reached.");
+            _documents = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async void OnIdentityChanged()
+    {
+        // Cleared before the fetch: one tenant's documents must never be on screen under
+        // another tenant's identity, even briefly.
+        _documents = null;
+        await InvokeAsync(StateHasChanged);
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Identity.Changed -= OnIdentityChanged;
+}

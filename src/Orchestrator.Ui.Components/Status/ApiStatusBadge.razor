@@ -1,0 +1,43 @@
+@*
+    Whether the API is answering.
+
+    This exists so that "the service is down" and "there is nothing to show" cannot look alike.
+    An empty audit table is a meaningful statement — no events have been recorded for this
+    tenant — and a reviewer must not read an unreachable API as that statement.
+*@
+
+<span class="oc-api-status oc-api-status--@Status.ToString().ToLowerInvariant()"
+      data-api-status="@Status.ToString().ToLowerInvariant()">
+    <span class="oc-api-status__dot" aria-hidden="true"></span>
+    <span class="oc-api-status__text">@Text</span>
+</span>
+
+@code {
+    /// <summary>Reachability of the API.</summary>
+    public enum ApiStatus
+    {
+        /// <summary>Not yet determined.</summary>
+        Unknown,
+
+        /// <summary>The readiness probe answered 200.</summary>
+        Ready,
+
+        /// <summary>The API answered, but reports it is not ready to serve.</summary>
+        NotReady,
+
+        /// <summary>The API could not be reached at all.</summary>
+        Unreachable,
+    }
+
+    /// <summary>The current status.</summary>
+    [Parameter]
+    public ApiStatus Status { get; set; }
+
+    private string Text => Status switch
+    {
+        ApiStatus.Ready => "API ready",
+        ApiStatus.NotReady => "API not ready",
+        ApiStatus.Unreachable => "API unavailable",
+        _ => "Checking API…",
+    };
+}

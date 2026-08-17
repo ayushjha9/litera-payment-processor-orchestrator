@@ -1,0 +1,22 @@
+@*
+    The gate's verdict.
+
+    A blocked status is rendered as a DECISION, not as an error. The API returns 200 for
+    blocked_pending_approval because it is a successful assessment whose answer is "no" — it
+    carries reasons, citations and audit ids. Styling it like a failure would invite a reviewer
+    to treat a policy outcome as a transport problem and retry it, which is exactly the
+    confusion the status-code choice was made to avoid.
+
+    So blocked states get their own "gated" treatment, distinct from both success and error.
+*@
+
+<span class="oc-badge oc-badge--action-@Status.Wire()" data-action-status="@Status.Wire()">
+    <span class="oc-badge__label">Action</span>
+    <span class="oc-badge__value">@Status.Label()</span>
+</span>
+
+@code {
+    /// <summary>The gate's verdict on the requested action.</summary>
+    [Parameter]
+    public ActionStatusDto Status { get; set; }
+}

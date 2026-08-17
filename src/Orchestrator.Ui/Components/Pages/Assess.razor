@@ -1,0 +1,127 @@
+@page "/"
+@implements IDisposable
+@inject ISessionIdentity Identity
+@inject OrchestratorApiClient Api
+
+<PageTitle>Assess — Vendor Risk Console</PageTitle>
+
+<h1>Assess a vendor</h1>
+
+<section class="oc-panel">
+    <EditForm Model="_form" OnValidSubmit="RunAsync" FormName="assess">
+        <DataAnnotationsValidator />
+
+        <label class="oc-field">
+            <span class="oc-field__label">Question</span>
+            <InputTextArea @bind-Value="_form.Question" class="oc-field__input" rows="2" />
+            <ValidationMessage For="() => _form.Question" />
+        </label>
+
+        <label class="oc-field">
+            <span class="oc-field__label">Requested action <span class="oc-field__hint">(optional)</span></span>
+            <InputText @bind-Value="_form.RequestedAction" class="oc-field__input"
+                       placeholder="markVendorApproved" />
+        </label>
+
+        @*
+            approvedBy is the one identity-adjacent field in the body, and correctly so: it
+            names a THIRD PARTY, not the caller. The API verifies it against the tenant's
+            approver registry and refuses it if it matches the caller — so this input cannot be
+            used to self-approve, however it is filled in.
+        *@
+        <label class="oc-field">
+            <span class="oc-field__label">Approved by <span class="oc-field__hint">(optional)</span></span>
+            <InputText @bind-Value="_form.ApprovedBy" class="oc-field__input"
+                       placeholder="compliance@tenant-b.example" />
+            <span class="oc-field__note">
+                A registered approver for this tenant, other than the requester.
+            </span>
+        </label>
+
+        <button type="submit" class="oc-button" disabled="@_running">
+            @(_running ? "Assessing…" : "Run assessment")
+        </button>
+    </EditForm>
+</section>
+
+@if (_problem is not null)
+{
+    @*
+        The API's own wording, unaltered. Notably the 403 does not name the rejected tenant —
+        the UI knows which one it asked about and must not helpfully fill that in, because doing
+        so would rebuild the tenant-enumeration oracle the API declines to be.
+    *@
+    <div class="oc-alert oc-alert--error" role="alert">
+        <strong>@_problem.Title</strong>
+        <span>@_problem.Detail</span>
+    </div>
+}
+
+@if (_result is not null)
+{
+    @* A blocked result is rendered in full, not as an error — the API returned 200. *@
+    <WorkflowResultView Result="_result" />
+}
+
+@code {
+    private readonly AssessForm _form = new();
+    private WorkflowResponseDto? _result;
+    private ApiProblemException? _problem;
+    private bool _running;
+
+    protected override void OnInitialized() => Identity.Changed += OnIdentityChanged;
+
+    private async Task RunAsync()
+    {
+        _running = true;
+        _problem = null;
+
+        try
+        {
+            _result = await Api.RunWorkflowAsync(new RunWorkflowRequestDto(
+                _form.Question,
+                Blank(_form.RequestedAction),
+                Blank(_form.ApprovedBy)));
+        }
+        catch (ApiProblemException exception)
+        {
+            _problem = exception;
+            _result = null;
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    /// <summary>
+    /// Clear the previous answer when the identity changes.
+    /// </summary>
+    /// <remarks>
+    /// Leaving tenant-a's result on screen after switching to tenant-b would show one tenant's
+    /// assessment under another tenant's identity. Nothing has leaked — the data was fetched
+    /// legitimately — but the screen would assert something false, which for a compliance
+    /// record is bad enough.
+    /// </remarks>
+    private void OnIdentityChanged()
+    {
+        _result = null;
+        _problem = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    public void Dispose() => Identity.Changed -= OnIdentityChanged;
+
+    private sealed class AssessForm
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A question is required.")]
+        public string Question { get; set; } =
+            "Can we approve Vendor X to process customer payment data?";
+
+        public string? RequestedAction { get; set; }
+
+        public string? ApprovedBy { get; set; }
+    }
+}

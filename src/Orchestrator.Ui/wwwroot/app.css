@@ -1,0 +1,118 @@
+/* Application shell. Component styles live in the library's components.css. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #16181d;
+    background: #eef0f4;
+    line-height: 1.5;
+}
+
+h1 { font-size: 1.45rem; margin: 0 0 0.75rem; }
+
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+
+.oc-shell {
+    display: grid;
+    grid-template-areas: "header header" "nav nav" "identity main" "footer footer";
+    grid-template-columns: minmax(220px, 280px) 1fr;
+    gap: 1rem;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 1.25rem;
+}
+
+.oc-shell__header {
+    grid-area: header;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.oc-shell__title { font-size: 1.2rem; font-weight: 700; display: block; }
+.oc-shell__subtitle { font-size: 0.8rem; color: #5c6370; }
+
+.oc-shell__nav { grid-area: nav; display: flex; gap: 0.4rem; border-bottom: 1px solid #d8dce3; }
+
+.oc-shell__link {
+    padding: 0.5rem 0.85rem;
+    text-decoration: none;
+    color: #5c6370;
+    border-bottom: 2px solid transparent;
+    font-size: 0.9rem;
+}
+
+.oc-shell__link:hover { color: #16181d; }
+.oc-shell__link.active { color: #16181d; font-weight: 600; border-bottom-color: #16181d; }
+
+.oc-shell__identity { grid-area: identity; }
+.oc-shell__main { grid-area: main; min-width: 0; }
+
+.oc-shell__footer {
+    grid-area: footer;
+    border-top: 1px solid #d8dce3;
+    padding-top: 0.75rem;
+    font-size: 0.78rem;
+    color: #5c6370;
+}
+
+@media (max-width: 760px) {
+    .oc-shell {
+        grid-template-areas: "header" "nav" "identity" "main" "footer";
+        grid-template-columns: 1fr;
+    }
+}
+
+.oc-panel {
+    background: #fff;
+    border: 1px solid #d8dce3;
+    border-radius: 10px;
+    padding: 1.1rem;
+}
+
+.oc-lede { color: #5c6370; margin: 0 0 1rem; max-width: 68ch; }
+.oc-scope-note { font-size: 0.85rem; color: #5c6370; margin: 0 0 1rem; }
+
+.oc-field { display: block; margin-bottom: 0.9rem; }
+.oc-field__label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; font-weight: 500; }
+.oc-field__hint { color: #5c6370; font-weight: 400; }
+.oc-field__note { display: block; font-size: 0.78rem; color: #5c6370; margin-top: 0.25rem; }
+
+.oc-field__input {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #d8dce3;
+    border-radius: 6px;
+    font: inherit;
+}
+
+.oc-button {
+    padding: 0.55rem 1.1rem;
+    border: 0;
+    border-radius: 6px;
+    background: #16181d;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.oc-button:disabled { opacity: 0.55; cursor: default; }
+
+.oc-alert {
+    margin-top: 1.25rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 8px;
+    border-left: 3px solid;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.oc-alert--error { background: #fbe9eb; border-color: #a01b2b; }
+
+.validation-message { color: #a01b2b; font-size: 0.8rem; }

@@ -1,0 +1,85 @@
+@*
+    The calling tenant's audit trail.
+
+    Two properties this component must preserve:
+
+      1. The API sends document IDS, never document text — untrusted content is kept out of the
+         audit log on purpose, so it cannot mislead a downstream reader or a log-consuming tool.
+         This component renders detail values as text regardless, so that if prose ever did
+         appear it would be displayed inertly rather than interpreted. The escaping is defence
+         in depth behind a server-side property, not a substitute for it.
+
+      2. There is no tenant column filter or selector. The API scopes /api/v1/audit to the
+         caller's own tenant and offers no tenant parameter; a UI control implying otherwise
+         would suggest a capability that does not and should not exist.
+*@
+
+<div class="oc-audit">
+    @if (Events is null || Events.Count == 0)
+    {
+        <p class="oc-empty">@EmptyText</p>
+    }
+    else
+    {
+        <table class="oc-audit__table">
+            <thead>
+                <tr>
+                    <th scope="col">Event</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Timestamp</th>
+                    <th scope="col">Actor</th>
+                    <th scope="col">Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in Events)
+                {
+                    <tr data-event-id="@e.EventId">
+                        <td><code>@e.EventId</code></td>
+                        <td>@e.EventType</td>
+                        <td class="oc-audit__timestamp">@e.Timestamp</td>
+                        <td>
+                            <div>@e.UserId</div>
+                            <div class="oc-audit__role">@e.Role</div>
+                        </td>
+                        <td>
+                            <dl class="oc-audit__details">
+                                @foreach (var (key, value) in e.Details)
+                                {
+                                    <dt>@key</dt>
+                                    <dd>@Render(value)</dd>
+                                }
+                            </dl>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    /// <summary>The events to render, already scoped to the caller's tenant by the API.</summary>
+    [Parameter]
+    public IReadOnlyList<AuditEventDto>? Events { get; set; }
+
+    /// <summary>Shown when the trail is empty.</summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "No audit events yet.";
+
+    /// <summary>
+    /// Flatten a detail value to a display string.
+    /// </summary>
+    /// <remarks>
+    /// Returns a plain string in every case, so the result is interpolated and escaped by the
+    /// caller. Arrays are joined rather than rendered structurally — detail values are short
+    /// lists of ids, and a nested renderer would be a second place to get escaping wrong.
+    /// </remarks>
+    private static string Render(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Null or JsonValueKind.Undefined => "—",
+        JsonValueKind.String => value.GetString() ?? string.Empty,
+        JsonValueKind.Array => string.Join(", ", value.EnumerateArray().Select(Render)),
+        _ => value.ToString(),
+    };
+}

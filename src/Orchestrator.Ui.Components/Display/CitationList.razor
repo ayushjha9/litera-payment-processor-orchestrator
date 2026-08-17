@@ -1,0 +1,52 @@
+@*
+    Citations: a document id and a quoted excerpt from that document.
+
+    THE SNIPPET IS UNTRUSTED VENDOR PROSE. It is written by the party being assessed, and one
+    of the fixtures deliberately contains an injected instruction aimed at an automated
+    reviewer. The engine's central property is that this text can never reach a risk score —
+    but it does reach here, on purpose, because a reviewer must be able to read what a decision
+    was based on.
+
+    So this component is where that trust boundary now lands:
+
+      - @citation.Snippet interpolates, which Blazor HTML-escapes. Never MarkupString, never
+        an innerHTML interop. Escaping is the default; the rule is about not opting out of it.
+      - The text is NOT filtered or redacted. Hiding the injected sentence would hide the very
+        thing the system is demonstrating it handles safely.
+      - It is visually marked as quoted, untrusted material so a reviewer does not read it as
+        something the system asserts.
+
+    Pinned by CitationListTests.
+*@
+
+<div class="oc-citations">
+    <h3 class="oc-citations__heading">Citations</h3>
+
+    @if (Citations is null || Citations.Count == 0)
+    {
+        <p class="oc-empty">No citations.</p>
+    }
+    else
+    {
+        <ul class="oc-citations__list">
+            @foreach (var citation in Citations)
+            {
+                <li class="oc-citation">
+                    <div class="oc-citation__id">@citation.DocumentId</div>
+                    <blockquote class="oc-citation__snippet" data-untrusted="true">
+                        @citation.Snippet
+                    </blockquote>
+                </li>
+            }
+        </ul>
+        <p class="oc-citations__note">
+            Quoted from vendor-supplied evidence. Shown as written, and never interpreted.
+        </p>
+    }
+</div>
+
+@code {
+    /// <summary>The citations backing the stated reasons.</summary>
+    [Parameter]
+    public IReadOnlyList<CitationDto>? Citations { get; set; }
+}

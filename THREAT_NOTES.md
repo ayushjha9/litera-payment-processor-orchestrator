@@ -1,7 +1,8 @@
 # Threat notes
 
 Top risks in this design, and what is actually done about them. Risks 1–3 are properties of
-the engine; risk 4 exists only because the engine is now reachable over HTTP.
+the engine; risk 4 exists only because the engine is reachable over HTTP; risk 5 exists only
+because there is now a browser UI in front of it.
 
 ## 1. Prompt injection via vendor-supplied evidence
 
@@ -110,6 +111,62 @@ client controls. Then add what an exposed endpoint needs regardless — per-tena
 rate limits (tighter on action-bearing requests than advisory ones), throttling and alerting on
 repeated approval attempts against one vendor, mTLS or a gateway in front, and request size
 limits. Until that exists, this service belongs on a trusted network, not a public one.
+
+## 5. The UI: untrusted evidence rendered in a reviewer's browser
+
+**Risk.** Risk 1 holds that vendor prose can never reach a decision, because scoring reads only
+structured `Has*` flags. But that prose is *deliberately* returned to callers — as citation
+snippets, and in full from `GET /api/v1/evidence` — so a reviewer can read what a decision was
+based on. A browser UI is therefore a new place the untrusted content lands, and a new class of
+interpreter to worry about.
+
+If any component rendered that text as markup, an injection that could not influence the risk
+score would instead execute in the reviewer's session, with their identity and their tenant.
+That is a *worse* outcome than the one the structured-flag design was built to prevent: the
+attacker stops trying to argue with the scoring logic and simply attacks the human reading it.
+The trust boundary did not disappear when prose was allowed out of the engine — it moved, and
+it now sits in `Orchestrator.Ui.Components`.
+
+Two adjacent problems arrive with the UI: a role selector is a privilege-escalation control in
+the most inviting possible place, and a stateful UI can leave one tenant's data on screen under
+another tenant's identity.
+
+**Mitigation here.**
+- Every API-derived string is interpolated (`@value`), which Blazor HTML-escapes. No
+  `MarkupString`, no `innerHTML` interop — anywhere in the library. Escaping is the framework
+  default, so the rule is about never opting out of it.
+- `UntrustedContentTests.cs` renders `<script>`, `<img onerror>`, `<svg onload>`, `<iframe>` and
+  `javascript:` payloads through `CitationList`, `EvidenceTable` and `AuditTable`, then asserts
+  against the **parsed DOM** that no element was built and no `on*` attribute bound. Asserting
+  on the markup string would be wrong: correctly escaped output still *contains* the characters
+  `onerror`, inertly, and a substring check would fail against a component behaving perfectly.
+- Untrusted regions are marked `data-untrusted` and styled as quotations, so a reviewer reads
+  vendor claims as claims. The evidence page separates the structured flags — which are what the
+  engine actually scores — from the prose, which is not.
+- The injected addendum is **not filtered or redacted**. Hiding it would hide the very thing the
+  system is demonstrating it handles safely.
+- Identity lives in a server-side, per-circuit `SessionIdentity`; `CallerHeaderHandler` is the
+  only place headers are set. Under Interactive Server rendering the browser exchanges only
+  SignalR messages, so the headers are not visible or editable in devtools.
+- The identity picker carries its own on-screen warning that it is not a login, because a
+  tenant/user/role selector otherwise reads as one.
+- Pages clear their data on identity change *before* re-fetching, so a slow request cannot leave
+  tenant-a's evidence on screen under tenant-b's identity.
+- The UI references neither `Orchestrator.Core` nor `Orchestrator.Api`, so no page can reach
+  past the API to the fixtures and become a second place tenant filtering is applied.
+- An unreachable API is reported as "API unavailable", never as an empty result — a blank audit
+  table is a factual claim and must not be indistinguishable from a network failure.
+
+**In production.** Escaping is necessary but is not the whole control. Add a strict
+`Content-Security-Policy` (no `unsafe-inline`, no inline event handlers) so a future rendering
+mistake fails closed rather than executing; ship `X-Content-Type-Options: nosniff` and a
+restrictive `Referrer-Policy`; and serve over HTTPS with `Secure`/`HttpOnly` cookies once real
+sessions exist. Treat any future rich rendering of evidence — markdown, HTML documents, PDF
+previews — as a redesign of this risk rather than a feature, since each reintroduces exactly the
+interpreter this mitigation removes. And note that the picker's server-side headers stop a
+*browser* tampering with identity; they do nothing about a network attacker, who can still call
+the API directly. Risk 4's conclusion is unchanged, and a UI that looks like a login makes it
+easier to forget.
 
 ## Honourable mentions
 

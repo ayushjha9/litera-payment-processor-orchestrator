@@ -1,0 +1,65 @@
+@*
+    The calling tenant's evidence for the vendor.
+
+    This renders the largest quantity of untrusted text in the application — whole vendor
+    documents, including the fixture that carries an injected instruction. Same rule as
+    CitationList: interpolated, never MarkupString.
+
+    It is also presented as *claimed*, not established. The structured Has* flags are what the
+    engine actually scores; the prose is what a vendor wrote about itself. A UI that laid them
+    out identically would invite a reviewer to read the prose as verified, which is the exact
+    confusion the structured-flag design exists to prevent. So the flags render as an explicit
+    control checklist, and the text renders in a container marked as vendor-supplied.
+
+    THREAT_NOTES.md questions whether this route should exist at all in a real deployment. The
+    UI should not quietly make it look authoritative.
+*@
+
+<div class="oc-evidence">
+    @if (Documents is null || Documents.Count == 0)
+    {
+        <p class="oc-empty">@EmptyText</p>
+    }
+    else
+    {
+        @foreach (var doc in Documents)
+        {
+            <article class="oc-document" data-document-id="@doc.DocumentId">
+                <header class="oc-document__header">
+                    <code class="oc-document__id">@doc.DocumentId</code>
+                    <span class="oc-document__type">@doc.DocType</span>
+                </header>
+
+                <h3 class="oc-document__title" data-untrusted="true">@doc.Title</h3>
+
+                <div class="oc-document__controls">
+                    <h4 class="oc-document__controls-heading">Controls evidenced</h4>
+                    <ul class="oc-document__flags">
+                        <Flag Label="SOC 2" Present="doc.HasSoc2" />
+                        <Flag Label="Encryption" Present="doc.HasEncryption" />
+                        <Flag Label="Breach notification" Present="doc.HasBreachNotification" />
+                        <Flag Label="Retention schedule" Present="doc.HasRetentionSchedule" />
+                    </ul>
+                    <p class="oc-document__controls-note">
+                        These structured flags are the only input to the risk score. The text below is not.
+                    </p>
+                </div>
+
+                <div class="oc-document__text" data-untrusted="true">
+                    <h4 class="oc-document__text-heading">Vendor-supplied text — unverified</h4>
+                    <p class="oc-document__body">@doc.Text</p>
+                </div>
+            </article>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>The documents to render, already scoped to the caller's tenant by the API.</summary>
+    [Parameter]
+    public IReadOnlyList<DocumentDto>? Documents { get; set; }
+
+    /// <summary>Shown when the tenant holds no evidence for the vendor.</summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "No evidence on file for this vendor.";
+}

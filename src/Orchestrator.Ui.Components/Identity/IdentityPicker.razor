@@ -1,0 +1,89 @@
+@*
+    Choose which identity the UI asserts to the API.
+
+    THIS IS NOT A LOGIN, AND THE COMPONENT SAYS SO ON SCREEN — not only in a notes file. A
+    reviewer looking at a tenant/user/role selector will reasonably assume an auth boundary
+    exists; here none does. The banner below is part of the component rather than something a
+    host page might forget to add.
+
+    What the picker does and does not change:
+
+      - It changes WHICH unverified identity is asserted. It does not verify one.
+      - The API's headers are unauthenticated (THREAT_NOTES.md risk 4). Moving the choice
+        server-side stops a *browser* from tampering with it; it stops nothing on the network.
+
+    The component itself is deliberately ignorant of all that. It raises an EventCallback and
+    the host decides what to do with it, so the library has no dependency on session state, on
+    HttpClient, or on the header names — none of which appear anywhere in this markup.
+*@
+
+<section class="oc-identity" aria-labelledby="oc-identity-heading">
+    <h2 id="oc-identity-heading" class="oc-identity__heading">Acting as</h2>
+
+    <div class="oc-identity__fields">
+        <label class="oc-identity__field">
+            <span class="oc-identity__label">Tenant</span>
+            <select class="oc-identity__select" value="@TenantId"
+                    @onchange="e => Emit(tenantId: e.Value?.ToString())">
+                @foreach (var tenant in Tenants)
+                {
+                    <option value="@tenant">@tenant</option>
+                }
+            </select>
+        </label>
+
+        <label class="oc-identity__field">
+            <span class="oc-identity__label">User</span>
+            <input class="oc-identity__input" type="text" value="@UserId"
+                   @onchange="e => Emit(userId: e.Value?.ToString())" />
+        </label>
+
+        <label class="oc-identity__field">
+            <span class="oc-identity__label">Role</span>
+            <select class="oc-identity__select" value="@Role"
+                    @onchange="e => Emit(role: Parse(e.Value?.ToString()))">
+                @foreach (var role in Enum.GetValues<RoleDto>())
+                {
+                    <option value="@role">@role.Label()</option>
+                }
+            </select>
+        </label>
+    </div>
+
+    <p class="oc-identity__warning" role="note">
+        <strong>Not authentication.</strong> This selects which identity is asserted; nothing
+        verifies it. In a real deployment these values would come from signed OIDC claims
+        validated server-side, and this control would not exist.
+    </p>
+</section>
+
+@code {
+    /// <summary>The tenant currently asserted.</summary>
+    [Parameter]
+    public string? TenantId { get; set; }
+
+    /// <summary>The user currently asserted.</summary>
+    [Parameter]
+    public string? UserId { get; set; }
+
+    /// <summary>The role currently asserted.</summary>
+    [Parameter]
+    public RoleDto Role { get; set; }
+
+    /// <summary>Selectable tenants. Supplied by the host, not known to the library.</summary>
+    [Parameter]
+    public IReadOnlyList<string> Tenants { get; set; } = [];
+
+    /// <summary>Raised with the full identity whenever any field changes.</summary>
+    [Parameter]
+    public EventCallback<(string TenantId, string UserId, RoleDto Role)> IdentityChanged { get; set; }
+
+    private Task Emit(string? tenantId = null, string? userId = null, RoleDto? role = null) =>
+        IdentityChanged.InvokeAsync((
+            tenantId ?? TenantId ?? string.Empty,
+            userId ?? UserId ?? string.Empty,
+            role ?? Role));
+
+    private static RoleDto Parse(string? value) =>
+        Enum.TryParse<RoleDto>(value, ignoreCase: true, out var parsed) ? parsed : RoleDto.Viewer;
+}

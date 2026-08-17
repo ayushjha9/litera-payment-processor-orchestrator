@@ -1,0 +1,18 @@
+@*
+    The risk level, as a badge.
+
+    Colour is a second channel, not the only one: the level is always spelled out in text, so
+    the badge is still readable if colour is unavailable to the reader. A compliance decision
+    should not depend on distinguishing amber from red.
+*@
+
+<span class="oc-badge oc-badge--risk-@Level.Wire()" data-risk="@Level.Wire()">
+    <span class="oc-badge__label">Risk</span>
+    <span class="oc-badge__value">@Level.Label()</span>
+</span>
+
+@code {
+    /// <summary>The assessed level.</summary>
+    [Parameter]
+    public RiskLevelDto Level { get; set; }
+}

@@ -88,6 +88,37 @@ blocked action is `200` rather than `403`; that the unknown-tenant `403` must no
 tenant id; and that the latent excerpt-length quirk was preserved and documented rather than
 silently "fixed". Each is a judgment about what the system should mean, not what it should do.
 
+## The UI
+
+A Blazor component library and review console were added on top of the API, again with Claude
+Code, again plan-first.
+
+**Useful.** Component scaffolding, the DI wiring for a typed client with a `DelegatingHandler`,
+and turning a component inventory into a bUnit suite are all well-trodden ground. The question
+worth asking up front was *"what does putting a browser in front of this change?"*, and it
+produced the two real answers before any code existed: untrusted vendor prose now reaches a
+renderer, and a role dropdown is a privilege-escalation control. Both became design constraints
+rather than review findings.
+
+**What needed correcting.** The first version of the escaping test asserted that the rendered
+**markup string** did not contain `onerror`. That test failed — against components that were
+behaving perfectly. Correctly escaped output still contains those characters, as the inert text
+`&lt;img src=x onerror=…&gt;`. The failure was in the assertion, not the component, and the
+tempting "fix" was to strip the payload in `CitationList` so the string check would pass — which
+would have destroyed the demonstration and replaced a real control with a cosmetic one. The
+correct assertion queries the parsed DOM: did an element get built, did a handler get bound.
+
+That is the most instructive error in this whole record, because a green test would have been
+available in either direction. It is worth stating plainly: a test that fails against correct
+code invites you to break the code.
+
+**Not delegated.** That the UI references neither `Orchestrator.Core` nor `Orchestrator.Api`,
+so it cannot reach past the API to the fixtures; that the injected addendum is rendered rather
+than filtered, because hiding it would hide the demonstration; that a blocked action is a full
+result and not an error state; that the `403` keeps the API's wording so the UI does not rebuild
+the tenant-enumeration oracle at the last step; and that the identity picker carries its own
+"not authentication" warning on screen rather than relying on a notes file nobody opens.
+
 ## Overall assessment
 
 AI was fastest on the parts with a known shape: package scaffolding, turning a list of failure

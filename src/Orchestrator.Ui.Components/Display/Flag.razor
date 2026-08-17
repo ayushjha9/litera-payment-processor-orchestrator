@@ -1,0 +1,23 @@
+@*
+    One structured control flag.
+
+    Absence is stated in words ("not evidenced") rather than shown only as a missing tick.
+    "No SOC 2 report" is the single most consequential fact this UI displays, and it should not
+    be communicable only by the absence of a mark.
+*@
+
+<li class="oc-flag oc-flag--@(Present ? "present" : "absent")" data-flag-present="@Present.ToString().ToLowerInvariant()">
+    <span class="oc-flag__mark" aria-hidden="true">@(Present ? "✓" : "✗")</span>
+    <span class="oc-flag__label">@Label</span>
+    <span class="oc-flag__state">@(Present ? "evidenced" : "not evidenced")</span>
+</li>
+
+@code {
+    /// <summary>The control's name.</summary>
+    [Parameter, EditorRequired]
+    public required string Label { get; set; }
+
+    /// <summary>Whether the document evidences it.</summary>
+    [Parameter]
+    public bool Present { get; set; }
+}

@@ -1,0 +1,260 @@
+/*
+    Component styles.
+
+    Colour is never the only signal: every badge spells out its value in text, and every
+    control flag states "evidenced" or "not evidenced" in words. A compliance decision must not
+    depend on telling amber from red.
+*/
+
+:root {
+    --oc-bg: #ffffff;
+    --oc-fg: #16181d;
+    --oc-muted: #5c6370;
+    --oc-line: #d8dce3;
+    --oc-surface: #f6f7f9;
+    --oc-low: #1a7f4b;
+    --oc-low-bg: #e6f4ec;
+    --oc-medium: #8a5a00;
+    --oc-medium-bg: #fdf1dc;
+    --oc-high: #a01b2b;
+    --oc-high-bg: #fbe9eb;
+    --oc-gate: #4b3b8f;
+    --oc-gate-bg: #eeeaf9;
+    --oc-untrusted: #8a5a00;
+    --oc-untrusted-bg: #fffaf0;
+}
+
+/* ---------- badges ---------- */
+
+.oc-badge {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--oc-line);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    background: var(--oc-surface);
+}
+
+.oc-badge__label {
+    color: var(--oc-muted);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+}
+
+.oc-badge__value { font-weight: 600; }
+
+.oc-badge--risk-low { background: var(--oc-low-bg); border-color: var(--oc-low); }
+.oc-badge--risk-low .oc-badge__value { color: var(--oc-low); }
+
+.oc-badge--risk-medium { background: var(--oc-medium-bg); border-color: var(--oc-medium); }
+.oc-badge--risk-medium .oc-badge__value { color: var(--oc-medium); }
+
+.oc-badge--risk-high { background: var(--oc-high-bg); border-color: var(--oc-high); }
+.oc-badge--risk-high .oc-badge__value { color: var(--oc-high); }
+
+.oc-badge--action-executed { background: var(--oc-low-bg); border-color: var(--oc-low); }
+.oc-badge--action-executed .oc-badge__value { color: var(--oc-low); }
+
+/*
+    Blocked states get their own treatment — neither success nor error. The API returns 200
+    for a blocked action because it is a successful assessment whose answer is "no"; styling it
+    as a failure would invite a reviewer to retry it as if it were a transport problem.
+*/
+.oc-badge--action-blocked_pending_approval,
+.oc-badge--action-blocked_unauthorized,
+.oc-badge--action-blocked_unknown_action {
+    background: var(--oc-gate-bg);
+    border-color: var(--oc-gate);
+}
+
+.oc-badge--action-blocked_pending_approval .oc-badge__value,
+.oc-badge--action-blocked_unauthorized .oc-badge__value,
+.oc-badge--action-blocked_unknown_action .oc-badge__value { color: var(--oc-gate); }
+
+.oc-badge--gate { background: var(--oc-gate-bg); border-color: var(--oc-gate); }
+.oc-badge--gate .oc-badge__value { color: var(--oc-gate); }
+
+/* ---------- result ---------- */
+
+.oc-result {
+    border: 1px solid var(--oc-line);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-top: 1.5rem;
+    background: var(--oc-bg);
+}
+
+.oc-result__header { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+
+.oc-result__recommendation {
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 0 0 1.25rem;
+}
+
+.oc-result__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.oc-result__audit { border-top: 1px solid var(--oc-line); padding-top: 1rem; }
+.oc-result__audit-heading, .oc-reasons__heading, .oc-citations__heading {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--oc-muted);
+    margin: 0 0 0.5rem;
+}
+.oc-result__audit-ids { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.oc-result__audit-note, .oc-citations__note {
+    color: var(--oc-muted);
+    font-size: 0.8rem;
+    margin: 0.75rem 0 0;
+}
+
+.oc-reasons__list, .oc-citations__list { margin: 0; padding-left: 1.1rem; }
+.oc-reasons__item { margin-bottom: 0.4rem; line-height: 1.5; }
+.oc-citations__list { list-style: none; padding: 0; }
+
+/* ---------- untrusted content ---------- */
+
+/*
+    Everything marked data-untrusted is vendor-written prose. It is rendered as text and never
+    as markup; the styling exists so a reviewer can see at a glance that they are reading a
+    claim rather than a finding.
+*/
+[data-untrusted="true"] {
+    border-left: 3px solid var(--oc-untrusted);
+    background: var(--oc-untrusted-bg);
+}
+
+.oc-citation { margin-bottom: 1rem; }
+.oc-citation__id { font-family: ui-monospace, monospace; font-size: 0.8rem; color: var(--oc-muted); }
+.oc-citation__snippet {
+    margin: 0.3rem 0 0;
+    padding: 0.6rem 0.85rem;
+    font-style: normal;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- evidence ---------- */
+
+.oc-document {
+    border: 1px solid var(--oc-line);
+    border-radius: 10px;
+    padding: 1.1rem;
+    margin-bottom: 1.25rem;
+}
+.oc-document__header { display: flex; gap: 0.75rem; align-items: center; }
+.oc-document__id { font-size: 0.8rem; color: var(--oc-muted); }
+.oc-document__type {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--oc-line);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+}
+.oc-document__title { margin: 0.5rem 0; padding: 0.4rem 0.7rem; font-size: 1rem; }
+.oc-document__controls { margin: 1rem 0; }
+.oc-document__controls-heading, .oc-document__text-heading {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--oc-muted);
+    margin: 0 0 0.5rem;
+}
+.oc-document__flags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.oc-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    border: 1px solid var(--oc-line);
+}
+.oc-flag--present { background: var(--oc-low-bg); border-color: var(--oc-low); color: var(--oc-low); }
+.oc-flag--absent { background: var(--oc-high-bg); border-color: var(--oc-high); color: var(--oc-high); }
+.oc-flag__state { font-size: 0.7rem; opacity: 0.85; }
+.oc-document__controls-note, .oc-document__text { font-size: 0.85rem; }
+.oc-document__text { padding: 0.6rem 0.85rem; border-radius: 0 6px 6px 0; }
+.oc-document__body { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- audit ---------- */
+
+.oc-audit { overflow-x: auto; }
+.oc-audit__table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.oc-audit__table th, .oc-audit__table td {
+    text-align: left;
+    padding: 0.55rem 0.6rem;
+    border-bottom: 1px solid var(--oc-line);
+    vertical-align: top;
+}
+.oc-audit__table th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--oc-muted);
+}
+.oc-audit__timestamp { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.oc-audit__role { color: var(--oc-muted); font-size: 0.8rem; }
+.oc-audit__details { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.6rem; }
+.oc-audit__details dt { color: var(--oc-muted); font-size: 0.75rem; }
+.oc-audit__details dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ---------- identity ---------- */
+
+.oc-identity {
+    border: 1px solid var(--oc-line);
+    border-radius: 10px;
+    padding: 1rem;
+    background: var(--oc-surface);
+}
+.oc-identity__heading {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--oc-muted);
+    margin: 0 0 0.75rem;
+}
+.oc-identity__fields { display: flex; flex-direction: column; gap: 0.7rem; }
+.oc-identity__field { display: flex; flex-direction: column; gap: 0.25rem; }
+.oc-identity__label { font-size: 0.8rem; color: var(--oc-muted); }
+.oc-identity__select, .oc-identity__input {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--oc-line);
+    border-radius: 6px;
+    font: inherit;
+    background: var(--oc-bg);
+    color: var(--oc-fg);
+}
+
+/* Deliberately prominent. A tenant/user/role selector reads as a login; this one is not. */
+.oc-identity__warning {
+    margin: 0.9rem 0 0;
+    padding: 0.55rem 0.7rem;
+    border-left: 3px solid var(--oc-high);
+    background: var(--oc-high-bg);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+/* ---------- api status ---------- */
+
+.oc-api-status { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; }
+.oc-api-status__dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--oc-muted); }
+.oc-api-status--ready .oc-api-status__dot { background: var(--oc-low); }
+.oc-api-status--notready .oc-api-status__dot { background: var(--oc-medium); }
+.oc-api-status--unreachable .oc-api-status__dot { background: var(--oc-high); }
+.oc-api-status--unreachable .oc-api-status__text { color: var(--oc-high); font-weight: 600; }
+
+.oc-empty { color: var(--oc-muted); font-style: italic; margin: 0.4rem 0; }
